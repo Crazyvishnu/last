@@ -1,78 +1,40 @@
-name: MGIT Attendance Bot
+# === FILE: .github/workflows/attendance.yml ===
+name: Send MGIT Attendance (Playwright) to Telegram
 
-# run on schedule (8:00 AM IST and 4:00 PM IST) and allow manual trigger
 on:
   schedule:
-    # 8:00 AM IST = 02:30 UTC
-    - cron: '30 2 * * *'
-    # 4:00 PM IST = 10:30 UTC
-    - cron: '30 10 * * *'
+    - cron: "30 2 * * *"   # 08:00 IST
+    - cron: "30 10 * * *"  # 16:00 IST
   workflow_dispatch:
-    inputs:
-      discover:
-        description: 'Set to true to run discovery mode (DISCOVER=1)'
-        required: false
-        default: 'false'
-      use_selenium:
-        description: 'Set to true to enable Selenium in this run (USE_SELENIUM=1)'
-        required: false
-        default: 'false'
 
 jobs:
-  run-attendance:
+  notify:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Python 3.10
+      - name: Setup Python 3.11
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: "3.11"
 
-      - name: Install system deps (Chromium + Chromedriver)
-        run: |
-          sudo apt-get update
-          # install chromium-browser and chromedriver
-          sudo apt-get install -y chromium-browser chromium-chromedriver
-          # show versions for debugging
-          chromium-browser --version || true
-          chromedriver --version || true
-
-      - name: Create venv & install Python deps
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install playwright httpx
+          # install browsers (with system deps)
+          python -m playwright install --with-deps
 
-      - name: Show environment (debug)
-        run: |
-          echo "USE_SELENIUM input: ${{ github.event.inputs.use_selenium }}"
-          echo "DISCOVER input: ${{ github.event.inputs.discover }}"
-          python -V
-
-      - name: Run attendance bot
+      - name: Run Playwright attendance notifier
         env:
-          # Twilio & WhatsApp
-          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
-          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
-          TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
-          YOUR_WHATSAPP_NUMBER: ${{ secrets.YOUR_WHATSAPP_NUMBER }}
-
-          # MGIT credentials
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           MGIT_USERNAME: ${{ secrets.MGIT_USERNAME }}
           MGIT_PASSWORD: ${{ secrets.MGIT_PASSWORD }}
-
-          # Optional developer debug
-          DEV_WHATSAPP_NUMBER: ${{ secrets.DEV_WHATSAPP_NUMBER }}
-
-          # Set USE_SELENIUM from input; set to '1' if input true
-          USE_SELENIUM: ${{ contains(fromJson('["true","True","1","yes","y"]'), github.event.inputs.use_selenium) && '1' || '0' }}
-          # Set DISCOVER from input; set to '1' if input true
-          DISCOVER: ${{ contains(fromJson('["true","True","1","yes","y"]'), github.event.inputs.discover) && '1' || '0' }}
-          BASE_URL: ${{ secrets.BASE_URL }}
+          # Optional overrides (set as Repository Variables)
+          LOGIN_URL: ${{ vars.LOGIN_URL }}
+          ATTENDANCE_URL: ${{ vars.ATTENDANCE_URL }}
+          TIMEOUT_SECONDS: ${{ vars.TIMEOUT_SECONDS }}
         run: |
-          # show which mode will run
-          echo "USE_SELENIUM=$USE_SELENIUM"
-          echo "DISCOVER=$DISCOVER"
-          # run the script (it checks DISCOVER env var)
-          python attendance_whatsapp.py
+          python send_attendance_playwright.py
