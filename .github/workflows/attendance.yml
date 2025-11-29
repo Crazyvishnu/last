@@ -1,14 +1,14 @@
-name: MGIT Attendance Bot
+name: MGIT Attendance Bot (Twilio)
 
 on:
   schedule:
-    # Runs at 8:00 AM IST (2:30 AM UTC) every day
+    # 8:00 AM IST = 2:30 AM UTC
     - cron: '30 2 * * *'
     
-    # Runs at 4:00 PM IST (10:30 AM UTC) every day
+    # 4:00 PM IST = 10:30 AM UTC
     - cron: '30 10 * * *'
   
-  # Allows manual trigger from Actions tab
+  # Manual trigger
   workflow_dispatch:
 
 jobs:
@@ -31,10 +31,9 @@ jobs:
       
       - name: Run attendance bot
         env:
-          WHATSAPP_APP_ID: ${{ secrets.WHATSAPP_APP_ID }}
-          WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_APP_SECRET }}
-          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
-          WHATSAPP_ACCESS_TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
           YOUR_WHATSAPP_NUMBER: ${{ secrets.YOUR_WHATSAPP_NUMBER }}
           MGIT_USERNAME: ${{ secrets.MGIT_USERNAME }}
           MGIT_PASSWORD: ${{ secrets.MGIT_PASSWORD }}
