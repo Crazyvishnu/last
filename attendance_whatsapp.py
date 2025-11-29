@@ -3,10 +3,9 @@ from bs4 import BeautifulSoup
 import os
 from datetime import datetime
 import re
+import json
 
 # WhatsApp Business API Credentials
-WHATSAPP_APP_ID = os.environ.get('WHATSAPP_APP_ID')
-WHATSAPP_APP_SECRET = os.environ.get('WHATSAPP_APP_SECRET')
 WHATSAPP_PHONE_NUMBER_ID = os.environ.get('WHATSAPP_PHONE_NUMBER_ID')
 WHATSAPP_ACCESS_TOKEN = os.environ.get('WHATSAPP_ACCESS_TOKEN')
 YOUR_WHATSAPP_NUMBER = os.environ.get('YOUR_WHATSAPP_NUMBER')
@@ -21,6 +20,23 @@ WHATSAPP_API_URL = f"https://graph.facebook.com/v18.0/{WHATSAPP_PHONE_NUMBER_ID}
 def send_whatsapp_message(message):
     """Send message via WhatsApp Business API"""
     try:
+        # Validate credentials
+        if not WHATSAPP_PHONE_NUMBER_ID:
+            print("❌ WHATSAPP_PHONE_NUMBER_ID is missing!")
+            return False
+        
+        if not WHATSAPP_ACCESS_TOKEN:
+            print("❌ WHATSAPP_ACCESS_TOKEN is missing!")
+            return False
+        
+        if not YOUR_WHATSAPP_NUMBER:
+            print("❌ YOUR_WHATSAPP_NUMBER is missing!")
+            return False
+        
+        print(f"📱 Phone Number ID: {WHATSAPP_PHONE_NUMBER_ID[:10]}...")
+        print(f"🔑 Access Token: {WHATSAPP_ACCESS_TOKEN[:20]}...")
+        print(f"👤 To Number: {YOUR_WHATSAPP_NUMBER}")
+        
         headers = {
             'Authorization': f'Bearer {WHATSAPP_ACCESS_TOKEN}',
             'Content-Type': 'application/json'
@@ -37,6 +53,8 @@ def send_whatsapp_message(message):
             }
         }
         
+        print(f"📤 Sending to: {WHATSAPP_API_URL}")
+        
         response = requests.post(WHATSAPP_API_URL, headers=headers, json=payload, timeout=15)
         
         if response.status_code == 200:
@@ -45,11 +63,39 @@ def send_whatsapp_message(message):
             print(f"✅ WhatsApp sent! Message ID: {msg_id}")
             return True
         else:
-            print(f"❌ Failed: {response.status_code} - {response.text}")
+            print(f"❌ Failed: {response.status_code}")
+            print(f"Response: {response.text}")
+            
+            # Parse error
+            try:
+                error_data = response.json()
+                error_msg = error_data.get('error', {}).get('message', 'Unknown error')
+                error_code = error_data.get('error', {}).get('code', 'N/A')
+                error_subcode = error_data.get('error', {}).get('error_subcode', 'N/A')
+                
+                print("\n🔍 Error Analysis:")
+                print(f"   Message: {error_msg}")
+                print(f"   Code: {error_code}")
+                print(f"   Subcode: {error_subcode}")
+                
+                if error_code == 100:
+                    print("\n💡 Possible fixes:")
+                    print("   1. Check WHATSAPP_PHONE_NUMBER_ID is correct")
+                    print("   2. Verify WHATSAPP_ACCESS_TOKEN has proper permissions")
+                    print("   3. Make sure YOUR_WHATSAPP_NUMBER is verified")
+                    print("   4. Token may have expired (generate new one)")
+                
+                if 'does not exist' in error_msg.lower():
+                    print("\n⚠️ The Phone Number ID doesn't exist or you don't have access to it")
+                    print("   Go to: WhatsApp → Getting Started → Copy the Phone number ID")
+                
+            except:
+                pass
+            
             return False
             
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Exception: {e}")
         return False
 
 def get_attendance():
@@ -82,7 +128,7 @@ def get_attendance():
         
         print(f"🔐 Logging in: {MGIT_USERNAME}")
         
-        # Login data with multiple field variations
+        # Login data
         login_data = {
             'username': MGIT_USERNAME,
             'password': MGIT_PASSWORD,
@@ -105,7 +151,6 @@ def get_attendance():
         
         # Submit login
         login_resp = session.post(login_url, data=login_data, headers=headers, timeout=20, allow_redirects=True)
-        
         print(f"Login: {login_resp.status_code}")
         
         # Find attendance page
@@ -131,7 +176,7 @@ def get_attendance():
         soup = BeautifulSoup(att_resp.text, 'html.parser')
         attendance_data = []
         
-        # Method 1: Span tags with percentages
+        # Method 1: Span tags
         spans = soup.find_all('span')
         for span in spans:
             text = span.get_text(strip=True)
@@ -140,8 +185,6 @@ def get_attendance():
             pct_match = re.search(r'\((\d+\.?\d*)\)', text)
             if pct_match and onclick:
                 percentage = float(pct_match.group(1))
-                
-                # Find subject name
                 parent = span.find_parent()
                 subject = "Subject"
                 
@@ -170,20 +213,8 @@ def get_attendance():
                                 'percentage': float(pct_match.group(1))
                             })
         
-        # Method 3: Text patterns
-        if not attendance_data:
-            text = soup.get_text()
-            matches = re.findall(r'([A-Za-z\s&]+?)[\s:-]+(\d+\.?\d*)\s*%', text)
-            for subject, pct in matches[:15]:
-                if len(subject.strip()) > 3:
-                    attendance_data.append({
-                        'subject': subject.strip()[:50],
-                        'percentage': float(pct)
-                    })
-        
         # Format message
         if attendance_data:
-            # Remove duplicates
             seen = set()
             unique = []
             for item in attendance_data:
@@ -202,14 +233,7 @@ def get_attendance():
             for item in attendance_data:
                 pct = item['percentage']
                 subject = item['subject']
-                
-                if pct >= 75:
-                    emoji = "✅"
-                elif pct >= 65:
-                    emoji = "⚠️"
-                else:
-                    emoji = "🔴"
-                
+                emoji = "✅" if pct >= 75 else "⚠️" if pct >= 65 else "🔴"
                 message += f"{emoji} {subject}: {pct}%\n"
             
             avg = sum(i['percentage'] for i in attendance_data) / len(attendance_data)
@@ -239,7 +263,15 @@ def main():
     success = send_whatsapp_message(attendance)
     
     print("\n" + "="*70)
-    print("✅ SUCCESS!" if success else "⚠️ FAILED!")
+    if success:
+        print("✅ SUCCESS! Check your WhatsApp")
+    else:
+        print("⚠️ FAILED! See error details above")
+        print("\n📝 Debug Checklist:")
+        print("   □ WHATSAPP_PHONE_NUMBER_ID is correct?")
+        print("   □ WHATSAPP_ACCESS_TOKEN is valid?")
+        print("   □ YOUR_WHATSAPP_NUMBER is verified?")
+        print("   □ Token hasn't expired?")
     print("="*70 + "\n")
 
 if __name__ == "__main__":
